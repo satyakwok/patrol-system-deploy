@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Admin - Patroli Security</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<!-- Firebase Storage TIDAK dipakai — foto disimpan base64 di Firestore -->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+:root{
+  --bg:#060810;--surface:#0b1a17;--card:#0F1520;--card2:#131B28;
+  --border:#182030;--accent:#00D4FF;--green:#00FF88;--danger:#FF4444;
+  --warn:#FFB800;--text:#E8F4FF;--muted:#3A5070;--muted2:#5A7090;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.02) 1px,transparent 1px);background-size:50px 50px;pointer-events:none;}
+
+/* ===== LOGIN OVERLAY — GREEN/WHITE THEME ===== */
+#login-overlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#004b31 0%,#006a45 50%,#004b31 100%);display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:24px;}
+#login-overlay.hidden{display:none;}
+.login-box{background:#ffffff;border:none;border-radius:20px;padding:40px 32px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.login-logo-img{width:80px;height:80px;object-fit:contain;margin-bottom:16px;}
+.login-title{font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:#004b31;margin-bottom:4px;}
+.login-sub{font-size:13px;color:#666;margin-bottom:28px;}
+.login-field{margin-bottom:16px;text-align:left;}
+.login-label{font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;display:block;}
+.login-inp{width:100%;background:#f5f7f6;border:1px solid #d0d8d4;border-radius:10px;padding:12px 14px;color:#222;font-family:'DM Sans',sans-serif;font-size:15px;outline:none;transition:border-color .2s;}
+.login-inp:focus{border-color:#004b31;box-shadow:0 0 0 3px rgba(0,75,49,0.1);}
+.login-btn{width:100%;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,#004b31,#006a45);color:#fff;font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;cursor:pointer;margin-top:8px;transition:all .2s;}
+.login-btn:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,75,49,0.3);}
+.login-btn:active{transform:scale(0.97);}
+.login-btn:disabled{opacity:.5;cursor:not-allowed;}
+.login-err{color:#d32f2f;font-size:13px;margin-top:12px;display:none;}
+.login-forgot{font-size:12px;color:#888;margin-top:16px;}
+
+.topbar{background:linear-gradient(180deg,#0A1220,var(--surface));border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1000;flex-shrink:0;}
+.topbar-left{display:flex;align-items:center;gap:12px;}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),#005577);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;}
+.logo-title{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--accent);letter-spacing:1px;}
+.logo-sub{font-size:10px;color:var(--muted2);letter-spacing:2px;text-transform:uppercase;}
+.topbar-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.live-badge{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.25);font-size:12px;color:var(--green);font-weight:600;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.clock-top{font-family:'Rajdhani',sans-serif;font-size:20px;color:var(--accent);font-weight:700;}
+.date-picker-wrap{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:6px 12px;}
+.date-picker-wrap label{font-size:11px;color:var(--muted2);white-space:nowrap;letter-spacing:.5px;text-transform:uppercase;}
+#global-date{background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;outline:none;color-scheme:dark;}
+.date-today-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted2);font-size:11px;cursor:pointer;white-space:nowrap;transition:all .2s;}
+.date-today-btn:hover,.date-today-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.08);}
+.date-filter-label{font-size:11px;color:var(--warn);background:rgba(255,184,0,.1);border:1px solid rgba(255,184,0,.25);border-radius:6px;padding:3px 8px;display:none;}
+.user-badge{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);font-size:12px;color:var(--accent);}
+.logout-btn{padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--muted2);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:all .2s;}
+.logout-btn:hover{border-color:var(--danger);color:var(--danger);}
+.nav-tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;overflow-x:auto;flex-shrink:0;}
+.nav-tab{padding:14px 20px;border:none;background:transparent;color:var(--muted2);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:7px;white-space:nowrap;transition:all .2s;}
+.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.nav-tab:hover{background:rgba(0,212,255,0.05);color:var(--accent);}
+.tab-badge{background:var(--danger);color:#fff;border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;}
+.tab-badge.warn{background:var(--warn);}
+.main{flex:1;padding:20px 24px;overflow-y:auto;}
+.tab-content{display:none;}
+.tab-content.active{display:block;animation:fadeIn 0.3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;overflow:hidden;transition:transform 0.2s, box-shadow 0.2s;}
+.stat-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,0.15);}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.stat-card.blue::before{background:var(--accent);}
+.stat-card.green::before{background:var(--green);}
+.stat-card.red::before{background:var(--danger);}
+.stat-card.warn::before{background:var(--warn);}
+.stat-label{font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;}
+.stat-value{font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;}
+.stat-card.blue .stat-value{color:var(--accent);}
+.stat-card.green .stat-value{color:var(--green);}
+.stat-card.red .stat-value{color:var(--danger);}
+.stat-card.warn .stat-value{color:var(--warn);}
+.stat-sub{font-size:11px;color:var(--muted2);margin-top:4px;}
+.map-container{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px;}
+.map-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.map-title{font-family:'Rajdhani',sans-serif;font-size:18px;color:var(--text);font-weight:700;}
+#live-map{height:380px;background:#0A1520;}
+#live-map-full{height:520px;background:#0A1520;}
+.map-legend{padding:10px 18px;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid var(--border);}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted2);}
+.legend-dot{width:10px;height:10px;border-radius:50%;}
+.reports-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.reports-title{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;}
+.filter-group{display:flex;gap:8px;flex-wrap:wrap;}
+.filter-btn{padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--muted2);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:all .2s;}
+.filter-btn:hover{transform:translateY(-1px);}
+.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.08);}
+.report-list{display:flex;flex-direction:column;gap:10px;}
+.report-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:flex-start;gap:14px;transition:all .2s;cursor:pointer;}
+.report-card:hover{border-color:var(--muted);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.2);}
+.report-card.aman{border-left:3px solid var(--green);}
+.report-card.tidak{border-left:3px solid var(--danger);}
+.report-photo{width:56px;height:56px;border-radius:8px;object-fit:cover;flex-shrink:0;}
+.report-photo-placeholder{width:56px;height:56px;border-radius:8px;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.report-info{flex:1;min-width:0;}
+.report-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+.report-name{font-weight:600;font-size:15px;}
+.report-badge{padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;}
+.badge-aman{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3);}
+.badge-tidak{background:rgba(255,68,68,.15);color:var(--danger);border:1px solid rgba(255,68,68,.3);}
+.report-meta{font-size:12px;color:var(--muted2);display:flex;gap:10px;flex-wrap:wrap;}
+.report-notes{font-size:12px;color:var(--muted2);margin-top:4px;font-style:italic;}
+.report-actions{display:flex;gap:6px;margin-top:8px;}
+.action-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--muted2);font-size:11px;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:4px;}
+.action-btn:hover{border-color:var(--accent);color:var(--accent);}
+.action-btn.delete:hover{border-color:var(--danger);color:var(--danger);}
+.action-btn.restore:hover{border-color:var(--green);color:var(--green);}
+.empty-state{text-align:center;padding:48px 20px;color:var(--muted2);}
+.empty-icon{font-size:48px;margin-bottom:12px;opacity:.5;}
+.qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;}
+.qr-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;}
+.qr-card-title{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;margin-bottom:4px;}
+.qr-card-sub{font-size:12px;color:var(--muted2);margin-bottom:14px;}
+.qr-code-wrap{background:#fff;border-radius:10px;padding:14px;display:inline-flex;margin-bottom:14px;}
+.qr-code-id{font-family:monospace;font-size:10px;color:var(--muted2);word-break:break-all;padding:6px;background:var(--card2);border-radius:6px;margin-bottom:10px;}
+.qr-print-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all .2s;width:100%;}
+.qr-print-btn:hover{border-color:var(--accent);color:var(--accent);}
+.qr-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.qr-afd-section{margin-bottom:28px;}
+.qr-afd-header{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--accent);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.qr-titik-list{font-size:11px;color:var(--muted2);text-align:left;margin-top:8px;padding:8px;background:var(--card2);border-radius:6px;line-height:1.7;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:18px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;}
+.modal-header{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+.modal-body{padding:20px;}
+.modal-photo{width:100%;border-radius:10px;margin-bottom:16px;}
+.modal-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:14px;}
+.modal-row:last-child{border:none;}
+.modal-key{color:var(--muted2);}
+.modal-val{font-weight:500;}
+.refresh-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--muted2);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;}
+.refresh-btn:hover{border-color:var(--accent);color:var(--accent);}
+/* ===== LIVE TRACKER STYLES ===== */
+.tracker-section{margin-bottom:20px;}
+.tracker-map-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:16px;}
+#tracker-map{height:400px;background:#0A1520;}
+.durasi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px;}
+.durasi-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;overflow:hidden;}
+.durasi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.durasi-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.durasi-nama{font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;}
+.durasi-shift-badge{font-size:11px;color:var(--muted2);background:var(--card2);padding:3px 9px;border-radius:20px;border:1px solid var(--border);}
+.durasi-stats-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.durasi-stat-box{background:var(--card2);border-radius:8px;padding:10px;text-align:center;}
+.durasi-stat-num{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;line-height:1;}
+.durasi-stat-lbl{font-size:10px;color:var(--muted2);margin-top:3px;letter-spacing:.5px;text-transform:uppercase;}
+.durasi-info-row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted2);margin-bottom:8px;}
+.durasi-bar-bg{background:var(--card2);border-radius:999px;height:5px;overflow:hidden;}
+.durasi-bar-fill{height:5px;border-radius:999px;transition:width .8s ease;}
+.track-point-list{display:flex;flex-direction:column;gap:8px;}
+.track-point-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:12px;transition:all 0.2s;}
+.track-point-item:hover{border-color:var(--muted);}
+.track-point-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+.track-point-info{flex:1;min-width:0;}
+.track-point-nama{font-weight:600;font-size:14px;}
+.track-point-meta{font-size:12px;color:var(--muted2);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;}
+.track-point-actions{flex-shrink:0;}
+/* Confirm dialog */
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(3px);z-index:3000;display:none;align-items:center;justify-content:center;padding:20px;}
+.confirm-overlay.open{display:flex;}
+.confirm-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 24px;max-width:380px;width:100%;text-align:center;}
+.confirm-title{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;margin-bottom:8px;}
+.confirm-msg{font-size:14px;color:var(--muted2);margin-bottom:20px;line-height:1.6;}
+.confirm-btns{display:flex;gap:10px;}
+.confirm-btns button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;}
+.confirm-cancel{background:var(--card2);color:var(--muted2);}
+.confirm-cancel:hover{border-color:var(--muted2);color:var(--text);}
+.confirm-ok{background:var(--danger);color:#fff;border-color:var(--danger);}
+.confirm-ok:hover{opacity:.85;}
+.confirm-ok.restore-btn{background:var(--green);border-color:var(--green);}
+
+/* ===== BUTTON ANIMATIONS & PROFESSIONAL STYLING ===== */
+button, .nav-tab, .filter-btn, .report-card {
+  transition: all 0.2s ease;
+}
+button:active {
+  transform: scale(0.97);
+}
+
+/* ===== HAMBURGER MENU FOR MOBILE ===== */
+.hamburger-btn{display:none;padding:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);border-radius:8px;cursor:pointer;font-size:20px;line-height:1;}
+.topbar-right.mobile-open{display:flex !important;}
+
+/* ===== RESPONSIVE CSS ===== */
+@media (max-width: 768px) {
+  .topbar{flex-direction:column;gap:10px;padding:10px 16px;}
+  .topbar-left{width:100%;justify-content:space-between;}
+  .hamburger-btn{display:block;}
+  .topbar-right{display:none;width:100%;flex-wrap:wrap;gap:8px;justify-content:center;}
+  .topbar-right.mobile-open{display:flex;}
+  .logo-title{font-size:16px;}
+  .nav-tabs{padding:0 12px;-webkit-overflow-scrolling:touch;}
+  .nav-tab{padding:10px 14px;font-size:12px;}
+  .main{padding:14px 12px;}
+  .stat-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
+  .stat-value{font-size:26px;}
+  #live-map{height:250px;}
+  #live-map-full{height:300px;}
+  #tracker-map{height:280px;}
+  .qr-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .report-card{padding:10px 12px;gap:10px;}
+  .report-photo,.report-photo-placeholder{width:44px;height:44px;}
+  .report-name{font-size:13px;}
+  .report-meta{font-size:11px;gap:6px;}
+  .date-picker-wrap{width:100%;justify-content:center;}
+  .clock-top{font-size:16px;}
+  .durasi-grid{grid-template-columns:1fr;}
+  .modal{max-width:95vw;margin:10px;}
+  .confirm-box{max-width:90vw;}
+  .map-header{flex-direction:column;align-items:flex-start;gap:8px;}
+}
+
+@media (max-width: 480px) {
+  .stat-grid{grid-template-columns:repeat(2,1fr);gap:6px;}
+  .stat-card{padding:12px;}
+  .stat-value{font-size:22px;}
+  .stat-label{font-size:10px;}
+  .qr-grid{grid-template-columns:1fr;}
+  #live-map{height:220px;}
+  #live-map-full{height:260px;}
+  #tracker-map{height:240px;}
+  .reports-title{font-size:17px;}
+  .nav-tab{padding:8px 10px;font-size:11px;}
+  .filter-btn{padding:5px 10px;font-size:11px;}
+  .logo-title{font-size:14px;}
+  .logo-sub{font-size:9px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN OVERLAY ===== -->
+<div id="login-overlay">
+  <div class="login-box">
+    <img src="asian-agri-logo.png" class="login-logo-img" alt="Asian Agri">
+    <div class="login-title">DASHBOARD ADMIN</div>
+    <div class="login-sub">Gunung Sahilan Connected — Security Patrol</div>
+    <div class="login-field">
+      <label class="login-label">Username</label>
+      <input class="login-inp" id="login-user" type="text" placeholder="Username..." autocomplete="off">
+    </div>
+    <div class="login-field">
+      <label class="login-label">Password</label>
+      <input class="login-inp" id="login-pass" type="password" placeholder="Password...">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">MASUK</button>
+    <div class="login-err" id="login-err">Username atau password salah!</div>
+    <div class="login-forgot">Lupa password? Hubungi Admin</div>
+  </div>
+</div>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <img src="asian-agri-logo.png" style="width:50px;height:50px;object-fit:contain;">
+      <div>
+        <div class="logo-title">KEBUN GUNUNG SAHILAN <span style="font-size:10px;font-weight:400;color:var(--muted2)">Admin</span></div>
+        <div class="logo-sub">Security Dashboard</div>
+      </div>
+    </div>
+    <button class="hamburger-btn" onclick="toggleMobileMenu()">&#9776;</button>
+  </div>
+  <div class="topbar-right" id="topbar-right">
+    <div class="date-picker-wrap">
+      <button class="date-today-btn" id="btn-today" onclick="setToday()">Hari Ini</button>
+      <input type="date" id="global-date" onchange="onDateChange()" title="Pilih tanggal lain">
+    </div>
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <div class="clock-top" id="clock-top">
+      <span id="clock-date">12/03/2026</span>&nbsp;<span id="clock-time">00:00:00</span>
+    </div>
+    <div class="user-badge" id="user-badge">admin</div>
+    <button class="logout-btn" onclick="insertTestData()" style="border-color:#f0ad4e;color:#f0ad4e;">Test Data</button>
+    <button class="logout-btn" onclick="doLogout()">Logout</button>
+  </div>
+</div>
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="switchTab('overview',this)">Overview</button>
+  <button class="nav-tab" onclick="switchTab('map',this)">Live Map</button>
+  <button class="nav-tab" onclick="switchTab('tracker',this)">Live Tracker</button>
+  <button class="nav-tab" onclick="switchTab('reports',this)">Laporan <span class="tab-badge" id="report-count-badge">0</span></button>
+  <button class="nav-tab" onclick="switchTab('arsip',this)">Arsip <span class="tab-badge warn" id="arsip-count-badge">0</span></button>
+  <button class="nav-tab" onclick="switchTab('qrcodes',this)">QR Codes</button>
+  <button class="nav-tab" style="margin-left:auto;background:var(--card2);color:var(--muted2);font-size:12px;border:1px solid var(--border);border-radius:8px;padding:8px 14px;" onclick="openExport()">Export Excel</button>
+</div>
+<div class="main">
+  <!-- OVERVIEW -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="stat-grid">
+      <div class="stat-card blue"><div class="stat-label">Total Laporan</div><div class="stat-value" id="stat-total">0</div><div class="stat-sub">Semua waktu</div></div>
+      <div class="stat-card green"><div class="stat-label">Kondisi Aman</div><div class="stat-value" id="stat-aman">0</div><div class="stat-sub">Laporan</div></div>
+      <div class="stat-card red"><div class="stat-label">Tidak Aman</div><div class="stat-value" id="stat-tidak">0</div><div class="stat-sub">Perlu tindakan</div></div>
+      <div class="stat-card warn"><div class="stat-label">Petugas Aktif</div><div class="stat-value" id="stat-petugas">0</div><div class="stat-sub">Security on duty</div></div>
+    </div>
+    <div class="map-container">
+      <div class="map-header">
+        <div class="map-title">Posisi Terakhir Tim</div>
+        <button class="refresh-btn" onclick="loadData()">Refresh</button>
+      </div>
+      <div id="live-map"></div>
+      <div class="map-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Aman</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div>Tidak Aman</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Blok Patroli</div>
+      </div>
+    </div>
+    <div class="reports-header"><div class="reports-title">Laporan Terbaru</div></div>
+    <div class="report-list" id="latest-list"><div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada laporan</p></div></div>
+  </div>
+  <!-- MAP -->
+  <div class="tab-content" id="tab-map">
+    <div class="map-container">
+      <div class="map-header">
+        <div class="map-title">Live Tracking Patroli</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="refresh-btn" onclick="toggleMapLayer()">Satellite/Map</button>
+          <button class="refresh-btn" onclick="loadData()">Refresh</button>
+          <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+        </div>
+      </div>
+      <div id="live-map-full"></div>
+      <div class="map-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Aman</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div>Tidak Aman</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;"><div class="reports-title" style="margin-bottom:12px;">Riwayat Posisi</div><div class="report-list" id="map-track-list"></div></div>
+  </div>
+  <!-- LIVE TRACKER -->
+  <div class="tab-content" id="tab-tracker">
+    <div class="tracker-map-wrap">
+      <div class="map-header">
+        <div class="map-title">Live Tracker GPS Patroli</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="refresh-btn" onclick="toggleTrackerMapLayer()">Satellite/Map</button>
+          <button class="refresh-btn" onclick="loadTracking()">Refresh</button>
+          <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+        </div>
+      </div>
+      <div id="tracker-map"></div>
+      <div class="map-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Blok Patroli</div>
+        <div class="legend-item"><div style="width:28px;height:0;border-top:3px dashed #aaa;margin-right:6px;"></div>Jalur Tracking</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Posisi Terakhir</div>
+      </div>
+    </div>
+    <div class="tracker-section">
+      <div class="reports-header" style="margin-bottom:12px;">
+        <div class="reports-title">Durasi & Monitoring Petugas</div>
+        <span style="font-size:12px;color:var(--muted2);">Data 24 jam terakhir</span>
+      </div>
+      <div class="durasi-grid" id="tracker-durasi">
+        <div class="empty-state"><div class="empty-icon">📡</div><p>Belum ada data tracking</p></div>
+      </div>
+    </div>
+    <div class="tracker-section">
+      <div class="reports-title" style="margin-bottom:12px;">Titik Tracking Terbaru</div>
+      <div class="track-point-list" id="tracker-list">
+        <div class="empty-state"><div class="empty-icon">📍</div><p>Belum ada titik tracking</p></div>
+      </div>
+    </div>
+  </div>
+  <!-- REPORTS -->
+  <div class="tab-content" id="tab-reports">
+    <div class="reports-header"><div class="reports-title">Semua Laporan</div><button class="refresh-btn" onclick="loadData()">Refresh</button></div>
+    <div class="filter-group" style="margin-bottom:16px;">
+      <button class="filter-btn active" onclick="filterReports('all',this)">Semua</button>
+      <button class="filter-btn" onclick="filterReports('AMAN',this)">Aman</button>
+      <button class="filter-btn" onclick="filterReports('TIDAK AMAN',this)">Tidak Aman</button>
+    </div>
+    <div class="report-list" id="all-reports-list"><div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada laporan</p></div></div>
+  </div>
+  <!-- ARSIP (Soft-deleted) -->
+  <div class="tab-content" id="tab-arsip">
+    <div class="reports-header"><div class="reports-title">Arsip Data Terhapus</div><button class="refresh-btn" onclick="loadArchived()">Refresh</button></div>
+    <p style="font-size:13px;color:var(--muted2);margin-bottom:16px;">Data yang sudah dihapus. Admin dengan role <b>full</b> bisa me-restore data ke daftar aktif.</p>
+    <div class="report-list" id="arsip-list"><div class="empty-state"><div class="empty-icon">🗑️</div><p>Belum ada data di arsip</p></div></div>
+  </div>
+  <!-- QR -->
+  <div class="tab-content" id="tab-qrcodes">
+    <div style="margin-bottom:16px;"><div class="reports-title">QR Code Blok Patroli</div><p style="font-size:13px;color:var(--muted2);margin-top:4px;">Print & tempel di tiap blok. Security wajib scan QR yang sesuai lokasinya. Setiap blok memiliki 3 titik pantau.</p></div>
+    <div class="qr-filter" id="qr-afd-filter"></div>
+    <div id="qr-grid"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header"><div class="modal-title">Detail Laporan</div><button class="modal-close" onclick="closeModal()">&#10005;</button></div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- EXPORT DIALOG -->
+<div class="confirm-overlay" id="export-dialog" onclick="closeExport(event)">
+  <div class="confirm-box" onclick="event.stopPropagation()" style="max-width:400px;">
+    <div class="confirm-title">Export Data ke Excel</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin:16px 0;">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label style="color:var(--muted2);font-size:13px;min-width:60px;">Dari</label>
+        <input type="date" id="export-from" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:'DM Sans',sans-serif;">
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label style="color:var(--muted2);font-size:13px;min-width:60px;">Sampai</label>
+        <input type="date" id="export-to" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:'DM Sans',sans-serif;">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button onclick="setExportRange('today')" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--accent);cursor:pointer;font-size:12px;">Hari Ini</button>
+        <button onclick="setExportRange('week')" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--accent);cursor:pointer;font-size:12px;">7 Hari</button>
+        <button onclick="setExportRange('month')" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--accent);cursor:pointer;font-size:12px;">30 Hari</button>
+        <button onclick="setExportRange('all')" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--accent);cursor:pointer;font-size:12px;">Semua</button>
+      </div>
+    </div>
+    <div id="export-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;display:none;"></div>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="closeExport()">Batal</button>
+      <button class="confirm-ok" onclick="doExport()" style="background:var(--accent);color:#000;">Download Excel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirm-dialog" onclick="closeConfirm(event)">
+  <div class="confirm-box" onclick="event.stopPropagation()">
+    <div class="confirm-title" id="confirm-title">Konfirmasi</div>
+    <div class="confirm-msg" id="confirm-msg">Yakin?</div>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="closeConfirm()">Batal</button>
+      <button class="confirm-ok" id="confirm-ok-btn" onclick="confirmAction()">Ya, Hapus</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyAhwTH6Pw4feyQnJxBM9v3J5WKJl-gRDys",
+  authDomain: "gunung-sahilan-connected.firebaseapp.com",
+  projectId: "gunung-sahilan-connected",
+  storageBucket: "gunung-sahilan-connected.firebasestorage.app",
+  messagingSenderId: "560741208383",
+  appId: "1:560741208383:web:01728f846a3983e85a838a",
+  measurementId: "G-ZGFS00T7XK"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+// Firebase Storage TIDAK dipakai (butuh Blaze plan)
+// Foto disimpan sebagai compressed base64 langsung di Firestore
+
+// ============================================================
+// ADMIN CREDENTIALS (edit di sini)
+// ============================================================
+const ADMIN_USERS = [
+  { username: 'admin',  password: 'admin123', role: 'full' },   // Semua akses
+  { username: 'viewer', password: 'admin123', role: 'read' },   // Hanya lihat
+  { username: 'editor', password: 'admin123', role: 'write' },  // Lihat + hapus
+];
+
+// ============================================================
+// BLOK DATA — sama dengan app petugas
+// ============================================================
+const AFD = {
+  '1':['A99a','A99b','A99c','A99d','A99e','A99f','A99g','A99h','A99i','A99j','A99k','A99l','A99m','A99n','A99o','A99p','A99q','A99r','A99s','A99t','A99u','A99v','A99w','A99x','A99y','A99z'],
+  '2':['B00a','B00b','B00c','B00d','B00e','B00f','B00g','B00h','B00i','B00j','B00k','B00l','B00m','B00n','B00o','B00p','B00q','B00r','B00s','B00t','B00u','B00v','B00w','B00x','B00y','B01a','B01b','B01c','B01d','B01e','B01f','B03a','B03b','B04a','B04b','B04c','B04d','B04e','B10a'],
+  '3':['C00a','C00b','C00c','C00d','C00e','C00f','C00g','C00h','C00i','C00j','C00k','C00l','C00m','C00n','C00o','C00p','C00q','C01a','C01b','C01c','C01d','C01e','C01f','C01g','C01h','C01i','C01j','C01k','C01l','C01m','C03a','C03b','C03c','C03d','C03e','C03f','C03g','C05a','C05b','C05c','C07a','C07b','C07c','C08a'],
+  '4':['D00a','D00b','D00c','D00d','D00e','D00f','D00g','D00h','D00i','D00j','D00k','D00l','D00m','D00n','D01a','D01b','D01c','D01d','D01e','D01f','D01g','D01h','D01i','D01j','D01k','D01l','D01m','D01n','D03a','D03b'],
+  '6':['F06a','F06b','F06c','F06d','F06e','F06f','F07a','F07b','F07c','F07d','F07e','F07f','F07g','F07h','F07i','F08a','F08b','F08c','F08d','F08e','F08f','F08g','F08h','F08i','F10a']
+};
+
+// Fungsi generate QR — SAMA PERSIS dengan app petugas
+function makeQR(blok) {
+  var h = 0;
+  for (var i = 0; i < blok.length; i++) h = (h * 31 + blok.charCodeAt(i)) & 0xffff;
+  return 'PATROL-' + blok.toUpperCase() + '-' + h.toString(16).toUpperCase().padStart(4,'0');
+}
+
+// Koordinat per blok (fallback offset grid)
+function getCoords(blok) {
+  var base = {'A':[-0.1800,101.3200],'B':[-0.1900,101.3300],'C':[-0.2000,101.3400],'D':[-0.2100,101.3500],'F':[-0.2200,101.3600]};
+  var prefix = blok[0].toUpperCase();
+  var b = base[prefix] || [-0.2000,101.3400];
+  var idx = blok.charCodeAt(blok.length-1) - 97;
+  var num = parseInt(blok.slice(1,3)) || 0;
+  return [b[0] - (num * 0.001) - (idx * 0.0002), b[1] + (idx * 0.0003)];
+}
+
+// Generate BLOK_CONFIG dari AFD data
+function buildBlokConfig() {
+  const config = [];
+  Object.entries(AFD).forEach(([afd, bloks]) => {
+    bloks.forEach(blok => {
+      const c = getCoords(blok);
+      config.push({ id: blok.toUpperCase(), label: 'Afd ' + afd + ' - ' + blok.toUpperCase(), qr: makeQR(blok), lat: c[0], lng: c[1], afd: afd });
+    });
+  });
+  return config;
+}
+
+const BLOK_CONFIG = buildBlokConfig();
+
+// ============================================================
+// STATE
+// ============================================================
+let allReports = [];
+let archivedReports = [];
+let filterStatus = 'all';
+let maps = {};
+let mapLayers = {};
+let secMarkers = {};
+let qrGenerated = false;
+let trackingData = [];
+let activeDate = '';
+let currentUser = null; // { username, role }
+let pendingConfirm = null; // { action, id, nama }
+
+// ============================================================
+// MOBILE MENU TOGGLE
+// ============================================================
+function toggleMobileMenu() {
+  document.getElementById('topbar-right').classList.toggle('mobile-open');
+}
+
+// ============================================================
+// LOGIN
+// ============================================================
+function checkSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem('patrol_admin_session'));
+    if (s && s.username && s.role && s.expiry > Date.now()) {
+      currentUser = { username: s.username, role: s.role };
+      document.getElementById('login-overlay').classList.add('hidden');
+      document.getElementById('user-badge').textContent = s.username + ' (' + s.role + ')';
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function doLogin() {
+  const u = document.getElementById('login-user').value.trim().toLowerCase();
+  const p = document.getElementById('login-pass').value;
+  const found = ADMIN_USERS.find(a => a.username.toLowerCase() === u && a.password === p);
+  if (found) {
+    currentUser = { username: found.username, role: found.role };
+    localStorage.setItem('patrol_admin_session', JSON.stringify({
+      username: found.username, role: found.role, expiry: Date.now() + 24 * 60 * 60 * 1000
+    }));
+    document.getElementById('login-overlay').classList.add('hidden');
+    document.getElementById('user-badge').textContent = found.username + ' (' + found.role + ')';
+    document.getElementById('login-err').style.display = 'none';
+    loadData();
+  } else {
+    document.getElementById('login-err').style.display = 'block';
+  }
+}
+
+function doLogout() {
+  localStorage.removeItem('patrol_admin_session');
+  currentUser = null;
+  document.getElementById('login-overlay').classList.remove('hidden');
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+}
+
+// Enter key login
+document.getElementById('login-pass').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('login-user').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('login-pass').focus();
+});
+
+// Role check helpers
+function canDelete() { return currentUser && (currentUser.role === 'full' || currentUser.role === 'write'); }
+function canRestore() { return currentUser && currentUser.role === 'full'; }
+
+// ============================================================
+// DATE FILTER
+// ============================================================
+function extractDate(waktu) {
+  if (!waktu) return '';
+  const s = String(waktu).trim();
+  const m1 = s.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{4})/);
+  if (m1) return m1[1].padStart(2,'0') + '/' + m1[2].padStart(2,'0') + '/' + m1[3];
+  const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) return m2[3] + '/' + m2[2] + '/' + m2[1];
+  const m3 = s.match(/^(\d{1,2})[-](\d{1,2})[-](\d{4})/);
+  if (m3) return m3[1].padStart(2,'0') + '/' + m3[2].padStart(2,'0') + '/' + m3[3];
+  return '';
+}
+
+function getFilteredReports() {
+  if (!activeDate) return allReports;
+  return allReports.filter(r => {
+    const d1 = extractDate(r.waktu);
+    const d2 = extractDate(r.timestamp);
+    return d1 === activeDate || d2 === activeDate;
+  });
+}
+
+function getFilteredTracking() {
+  if (!activeDate) return trackingData;
+  return trackingData.filter(r => extractDate(r['Timestamp']) === activeDate);
+}
+
+function onDateChange() {
+  const val = document.getElementById('global-date').value;
+  if (!val) { activeDate = ''; } else {
+    const [y,m,d] = val.split('-');
+    activeDate = d + '/' + m + '/' + y;
+  }
+  const n = new Date(); const todayStr = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0');
+  const isToday = val === todayStr;
+  document.getElementById('btn-today').classList.toggle('active', isToday);
+  loadData();
+  if (document.getElementById('tab-tracker').classList.contains('active')) loadTracking();
+}
+
+function setToday() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth()+1).padStart(2,'0');
+  const d = String(now.getDate()).padStart(2,'0');
+  document.getElementById('global-date').value = y + '-' + m + '-' + d;
+  onDateChange();
+}
+
+// ============================================================
+// CLOCK
+// ============================================================
+function updateClock() {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,'0');
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  const yyyy = now.getFullYear();
+  document.getElementById('clock-date').textContent = dd + '/' + mm + '/' + yyyy;
+  document.getElementById('clock-time').textContent = now.toLocaleTimeString('id-ID');
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ============================================================
+// TABS
+// ============================================================
+let trackerMap = null, trackerPolylines = [], trackerMarkers = [];
+const TRACK_COLORS = ['#00D4FF','#FFB800','#00FF88','#FF6B6B','#B44DFF','#FF8C00','#39FF14','#FF69B4','#00BFFF'];
+
+function getColor(nama) {
+  const names = [...new Set(trackingData.map(r => r['Nama']).filter(Boolean))].sort();
+  const i = names.indexOf(nama);
+  return TRACK_COLORS[i >= 0 ? i % TRACK_COLORS.length : 0];
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  el.classList.add('active');
+  if (tab === 'map' && !maps.full) initMap('live-map-full', 'full');
+  if (tab === 'tracker') { initTrackerMap(); loadTracking(); }
+  if (tab === 'qrcodes' && !qrGenerated) generateQRCodes();
+  if (tab === 'arsip') loadArchived();
+}
+
+// ============================================================
+// MAP — DEFAULT SATELLITE
+// ============================================================
+let currentSatellite = false;
+
+function initMap(elId, key) {
+  // Hitung center dari semua blok
+  const lats = BLOK_CONFIG.map(b => b.lat), lngs = BLOK_CONFIG.map(b => b.lng);
+  const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+  maps[key] = L.map(elId, { zoomControl: true, scrollWheelZoom: key === 'full' }).setView([centerLat, centerLng], 14);
+
+  // Satellite layer (DEFAULT)
+  const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '©Esri', maxZoom: 19 });
+  // Street layer (toggle)
+  const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '©CartoDB', maxZoom: 19 });
+
+  satLayer.addTo(maps[key]);
+  mapLayers[key] = { dark: streetLayer, sat: satLayer, current: 'sat' };
+
+  // Hanya tampilkan beberapa blok kunci di peta (tidak semua 200+ blok)
+  // Tampilkan blok yang punya laporan
+  updateMapMarkers(key);
+}
+
+function toggleMapLayer() {
+  const key = 'full';
+  if (!maps[key] || !mapLayers[key]) return;
+  const ml = mapLayers[key];
+  if (ml.current === 'sat') {
+    maps[key].removeLayer(ml.sat);
+    ml.dark.addTo(maps[key]);
+    ml.current = 'dark';
+  } else {
+    maps[key].removeLayer(ml.dark);
+    ml.sat.addTo(maps[key]);
+    ml.current = 'sat';
+  }
+}
+
+function updateMapMarkers(key) {
+  const map = maps[key]; if (!map) return;
+  if (secMarkers[key]) secMarkers[key].forEach(m => map.removeLayer(m));
+  secMarkers[key] = [];
+  const latest = {};
+  getFilteredReports().forEach(r => { if (r.gpsLat && r.gpsLng && !latest[r.nama]) latest[r.nama] = r; });
+  const positions = [];
+  Object.values(latest).forEach(r => {
+    const c = r.status === 'AMAN' ? '#00FF88' : '#FF4444';
+    const icon = L.divIcon({
+      html: '<div style="position:relative"><div style="width:14px;height:14px;border-radius:50%;background:' + c + ';border:2px solid #fff;box-shadow:0 0 12px ' + c + ';"></div><div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:' + c + ';border-radius:4px;padding:2px 6px;font-size:10px;white-space:nowrap;">' + r.nama + '</div></div>',
+      className: '', iconAnchor: [7, 7]
+    });
+    const m = L.marker([parseFloat(r.gpsLat), parseFloat(r.gpsLng)], { icon }).addTo(map);
+    m.bindPopup('<b>' + r.nama + '</b><br>' + r.blok + '<br>Status: <b>' + r.status + '</b><br>' + r.waktu);
+    secMarkers[key].push(m);
+    positions.push([parseFloat(r.gpsLat), parseFloat(r.gpsLng)]);
+  });
+  if (positions.length === 1) {
+    map.setView(positions[0], 17);
+  } else if (positions.length > 1) {
+    map.fitBounds(positions, { padding: [50, 50], maxZoom: 17, animate: true });
+  }
+}
+
+// ============================================================
+// LOAD DATA
+// ============================================================
+// Realtime listener for laporan
+let laporanUnsub = null;
+function loadData() {
+  document.getElementById('report-count-badge').textContent = '...';
+
+  // Unsubscribe previous listener if exists
+  if (laporanUnsub) { laporanUnsub(); laporanUnsub = null; }
+
+  laporanUnsub = db.collection('laporan')
+    .where('deleted', '==', false)
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(snapshot => {
+      allReports = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          nama: d.nama || '',
+          shift: d.shift || '',
+          blok: d.pos || d.blok || '',
+          waktu: d.waktu || '',
+          timestamp: d.waktu || '',
+          gpsLat: d.gpsLat || '',
+          gpsLng: d.gpsLng || '',
+          status: d.status || '',
+          catatan: d.catatan || '',
+          foto: d.foto || '',
+        };
+      });
+      updateStats(); renderLatest(); renderAllReports(); renderMapTrack();
+      updateMapMarkers('mini'); updateMapMarkers('full');
+      document.getElementById('report-count-badge').textContent = getFilteredReports().length;
+    }, err => {
+      console.error('Firestore listen error:', err);
+      document.getElementById('report-count-badge').textContent = '!';
+      const el = document.getElementById('latest-list');
+      if (el) el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p style="color:var(--danger)">Gagal koneksi ke Firebase</p><p style="font-size:12px;margin-top:8px;color:var(--muted2)">Pastikan Firestore sudah diaktifkan di Firebase Console</p></div>';
+    });
+}
+
+// ============================================================
+// LOAD ARCHIVED
+// ============================================================
+let arsipUnsub = null;
+function loadArchived() {
+  if (arsipUnsub) { arsipUnsub(); arsipUnsub = null; }
+
+  arsipUnsub = db.collection('laporan')
+    .where('deleted', '==', true)
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(snapshot => {
+      archivedReports = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          nama: d.nama || '',
+          shift: d.shift || '',
+          blok: d.pos || d.blok || '',
+          waktu: d.waktu || '',
+          timestamp: d.waktu || '',
+          gpsLat: d.gpsLat || '',
+          gpsLng: d.gpsLng || '',
+          status: d.status || '',
+          catatan: d.catatan || '',
+          foto: d.foto || '',
+          deletedAt: d.deletedAt || '',
+        };
+      });
+      document.getElementById('arsip-count-badge').textContent = archivedReports.length;
+      renderArsip();
+    }, () => {
+      document.getElementById('arsip-list').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Gagal memuat arsip</p></div>';
+    });
+}
+
+// ============================================================
+// STATS & RENDER
+// ============================================================
+function updateStats() {
+  const r = getFilteredReports();
+  document.getElementById('stat-total').textContent = r.length;
+  document.getElementById('stat-aman').textContent = r.filter(x => x.status === 'AMAN').length;
+  document.getElementById('stat-tidak').textContent = r.filter(x => x.status === 'TIDAK AMAN').length;
+  document.getElementById('stat-petugas').textContent = new Set(r.map(x => x.nama)).size;
+}
+
+function cardHTML(r, showDelete) {
+  const a = r.status === 'AMAN';
+  const fotoSrc = r.foto && (r.foto.startsWith('data:image') || r.foto.startsWith('http')) ? r.foto : '';
+  const ph = fotoSrc
+    ? '<img class="report-photo" src="' + fotoSrc + '" alt="foto" onerror="this.outerHTML=\'<div class=report-photo-placeholder>📸</div>\'">'
+    : '<div class="report-photo-placeholder">📸</div>';
+  let actions = '';
+  if (showDelete && canDelete()) {
+    actions = '<div class="report-actions"><button class="action-btn delete" onclick="event.stopPropagation();confirmDelete(\'' + r.id + '\',\'' + (r.nama || '').replace(/'/g, "\\'") + '\')">🗑️ Hapus</button></div>';
+  }
+  return '<div class="report-card ' + (a ? 'aman' : 'tidak') + '" onclick="openModal(\'' + r.id + '\')">'
+    + ph + '<div class="report-info"><div class="report-top"><span class="report-name">' + r.nama + '</span><span class="report-badge ' + (a ? 'badge-aman' : 'badge-tidak') + '">' + r.status + '</span></div>'
+    + '<div class="report-meta"><span>' + r.blok + '</span><span>' + (r.shift || '').split(' ')[0] + '</span><span>' + r.waktu + '</span>'
+    + (r.gpsLat ? '<span>' + r.gpsLat + ',' + r.gpsLng + '</span>' : '') + '</div>'
+    + (r.catatan ? '<div class="report-notes">"' + r.catatan + '"</div>' : '')
+    + actions + '</div></div>';
+}
+
+function arsipCardHTML(r) {
+  const a = r.status === 'AMAN';
+  let actions = '';
+  if (canRestore()) {
+    actions = '<div class="report-actions"><button class="action-btn restore" onclick="event.stopPropagation();confirmRestore(\'' + r.id + '\',\'' + (r.nama || '').replace(/'/g, "\\'") + '\')">♻️ Restore</button></div>';
+  }
+  return '<div class="report-card ' + (a ? 'aman' : 'tidak') + '" style="opacity:.7;" onclick="openModal(\'' + r.id + '\',true)">'
+    + '<div class="report-photo-placeholder">🗑️</div><div class="report-info"><div class="report-top"><span class="report-name">' + r.nama + '</span><span class="report-badge ' + (a ? 'badge-aman' : 'badge-tidak') + '">' + r.status + '</span></div>'
+    + '<div class="report-meta"><span>' + r.blok + '</span><span>' + r.waktu + '</span>'
+    + (r.deletedAt ? '<span style="color:var(--warn)">Dihapus: ' + r.deletedAt + '</span>' : '') + '</div>'
+    + (r.catatan ? '<div class="report-notes">"' + r.catatan + '"</div>' : '')
+    + actions + '</div></div>';
+}
+
+function renderLatest() {
+  const el = document.getElementById('latest-list');
+  const items = getFilteredReports().slice(0, 5);
+  el.innerHTML = items.length ? items.map(r => cardHTML(r, true)).join('') : '<div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada laporan' + (activeDate ? ' pada ' + activeDate : '') + '</p></div>';
+}
+
+function renderAllReports() {
+  const el = document.getElementById('all-reports-list');
+  const base = getFilteredReports();
+  let items = filterStatus === 'all' ? base : base.filter(r => r.status === filterStatus);
+  el.innerHTML = items.length ? items.map(r => cardHTML(r, true)).join('') : '<div class="empty-state"><div class="empty-icon">🔍</div><p>Tidak ada laporan' + (activeDate ? ' pada ' + activeDate : '') + '</p></div>';
+}
+
+function renderArsip() {
+  const el = document.getElementById('arsip-list');
+  el.innerHTML = archivedReports.length ? archivedReports.map(arsipCardHTML).join('') : '<div class="empty-state"><div class="empty-icon">🗑️</div><p>Arsip kosong</p></div>';
+}
+
+function renderMapTrack() {
+  const el = document.getElementById('map-track-list');
+  el.innerHTML = getFilteredReports().slice(0, 10).map(r => {
+    const a = r.status === 'AMAN';
+    return '<div class="report-card ' + (a ? 'aman' : 'tidak') + '" onclick="openModal(\'' + r.id + '\')">'
+      + '<div class="report-photo-placeholder">' + (a ? '✅' : '🚨') + '</div>'
+      + '<div class="report-info"><div class="report-top"><span class="report-name">' + r.nama + ' — ' + r.blok + '</span>'
+      + '<span class="report-badge ' + (a ? 'badge-aman' : 'badge-tidak') + '">' + r.status + '</span></div>'
+      + '<div class="report-meta"><span>' + r.waktu + '</span>'
+      + (r.gpsLat ? '<span>' + r.gpsLat + ', ' + r.gpsLng + '</span>' : '<span style="color:var(--muted)">GPS tidak tersedia</span>') + '</div></div></div>';
+  }).join('') || '<div class="empty-state"><div class="empty-icon">📍</div><p>Belum ada data' + (activeDate ? ' pada ' + activeDate : '') + '</p></div>';
+}
+
+function filterReports(val, el) {
+  filterStatus = val;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderAllReports();
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function openModal(id, isArchive) {
+  const src = isArchive ? archivedReports : allReports;
+  const r = src.find(x => x.id === id); if (!r) return;
+  const a = r.status === 'AMAN';
+  document.getElementById('modal-body').innerHTML =
+    ((r.foto && (r.foto.startsWith('data:image') || r.foto.startsWith('http'))) ? '<img class="modal-photo" src="' + r.foto + '" alt="foto" onerror="this.style.display=\'none\'">' : '<div style="background:var(--card2);border-radius:10px;padding:40px;text-align:center;margin-bottom:16px;color:var(--muted2);">Tidak ada foto</div>')
+    + '<div class="modal-row"><span class="modal-key">Nama</span><span class="modal-val">' + r.nama + '</span></div>'
+    + '<div class="modal-row"><span class="modal-key">Blok</span><span class="modal-val">' + r.blok + '</span></div>'
+    + '<div class="modal-row"><span class="modal-key">Shift</span><span class="modal-val">' + r.shift + '</span></div>'
+    + '<div class="modal-row"><span class="modal-key">Waktu</span><span class="modal-val">' + r.waktu + '</span></div>'
+    + '<div class="modal-row"><span class="modal-key">GPS</span><span class="modal-val">' + (r.gpsLat ? r.gpsLat + ', ' + r.gpsLng : 'Tidak tersedia') + '</span></div>'
+    + '<div class="modal-row"><span class="modal-key">Status</span><span class="modal-val" style="color:' + (a ? 'var(--green)' : 'var(--danger)') + ';font-weight:700">' + r.status + '</span></div>'
+    + (r.catatan ? '<div class="modal-row"><span class="modal-key">Catatan</span><span class="modal-val">' + r.catatan + '</span></div>' : '')
+    + (r.gpsLat ? '<a href="https://maps.google.com/?q=' + r.gpsLat + ',' + r.gpsLng + '" target="_blank" style="display:block;margin-top:14px;padding:10px;background:var(--card2);border-radius:8px;color:var(--accent);text-align:center;font-size:13px;text-decoration:none;">Buka di Google Maps</a>' : '');
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal')) document.getElementById('modal').classList.remove('open');
+}
+
+// ============================================================
+// CONFIRM DELETE / RESTORE
+// ============================================================
+function confirmDelete(id, nama) {
+  pendingConfirm = { action: 'delete', id: id };
+  document.getElementById('confirm-title').textContent = 'Hapus Laporan?';
+  document.getElementById('confirm-msg').textContent = 'Laporan dari "' + nama + '" akan dipindahkan ke arsip. Data tidak hilang permanen.';
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.textContent = 'Ya, Hapus';
+  btn.className = 'confirm-ok';
+  document.getElementById('confirm-dialog').classList.add('open');
+}
+
+function confirmRestore(id, nama) {
+  pendingConfirm = { action: 'restore', id: id };
+  document.getElementById('confirm-title').textContent = 'Restore Laporan?';
+  document.getElementById('confirm-msg').textContent = 'Laporan dari "' + nama + '" akan dikembalikan ke daftar aktif.';
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.textContent = 'Ya, Restore';
+  btn.className = 'confirm-ok restore-btn';
+  document.getElementById('confirm-dialog').classList.add('open');
+}
+
+function confirmDeleteTracking(docId, nama) {
+  pendingConfirm = { action: 'delete-tracking', id: docId };
+  document.getElementById('confirm-title').textContent = 'Hapus Titik Tracking?';
+  document.getElementById('confirm-msg').textContent = 'Titik tracking dari "' + nama + '" akan dihapus permanen.';
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.textContent = 'Ya, Hapus';
+  btn.className = 'confirm-ok';
+  document.getElementById('confirm-dialog').classList.add('open');
+}
+
+function closeConfirm(e) {
+  if (!e || e.target === document.getElementById('confirm-dialog')) {
+    document.getElementById('confirm-dialog').classList.remove('open');
+    pendingConfirm = null;
+  }
+}
+
+function confirmAction() {
+  if (!pendingConfirm) return;
+  const { action, id } = pendingConfirm;
+  closeConfirm();
+
+  if (action === 'delete-tracking') {
+    db.collection('tracking').doc(String(id)).delete()
+      .then(() => { console.log('Tracking point deleted: ' + id); })
+      .catch(err => { alert('Gagal hapus tracking: ' + err.message); });
+    return;
+  }
+
+  const docRef = db.collection('laporan').doc(String(id));
+  let updateData;
+  if (action === 'delete') {
+    updateData = { deleted: true, deletedAt: new Date().toLocaleString('id-ID') };
+  } else {
+    updateData = { deleted: false, deletedAt: '' };
+  }
+
+  docRef.update(updateData)
+    .then(() => {
+      // Realtime listeners will auto-update the UI
+      console.log(action + ' success for ' + id);
+    })
+    .catch(err => {
+      alert('Gagal: ' + err.message);
+    });
+}
+
+// ============================================================
+// QR CODES — STRUCTURED BY AFDELING WITH 3 TITIK PANTAU
+// ============================================================
+let qrAfdFilter = 'all';
+
+function generateQRCodes(afdFilter) {
+  qrGenerated = true;
+  qrAfdFilter = afdFilter || 'all';
+
+  // Render filter buttons
+  const filterEl = document.getElementById('qr-afd-filter');
+  filterEl.innerHTML = '<button class="filter-btn ' + (qrAfdFilter === 'all' ? 'active' : '') + '" onclick="generateQRCodes(\'all\')">Semua</button>';
+  Object.keys(AFD).forEach(afd => {
+    filterEl.innerHTML += '<button class="filter-btn ' + (qrAfdFilter === afd ? 'active' : '') + '" onclick="generateQRCodes(\'' + afd + '\')">Afd ' + afd + '</button>';
+  });
+
+  const grid = document.getElementById('qr-grid');
+  grid.innerHTML = '';
+
+  const afdsToShow = qrAfdFilter === 'all' ? Object.keys(AFD) : [qrAfdFilter];
+
+  afdsToShow.forEach(afd => {
+    const section = document.createElement('div');
+    section.className = 'qr-afd-section';
+    section.innerHTML = '<div class="qr-afd-header">Afdeling ' + afd + ' (' + AFD[afd].length + ' blok)</div>';
+
+    const blokGrid = document.createElement('div');
+    blokGrid.className = 'qr-grid';
+
+    const bloks = BLOK_CONFIG.filter(b => b.afd === afd);
+    bloks.forEach(blok => {
+      const card = document.createElement('div');
+      card.className = 'qr-card';
+      const safeId = blok.id.replace(/[^a-zA-Z0-9]/g, '');
+      card.innerHTML = '<div class="qr-card-title">' + blok.id + '</div>'
+        + '<div class="qr-card-sub">' + blok.label + '</div>'
+        + '<div class="qr-code-wrap" id="qr-' + safeId + '"></div>'
+        + '<div class="qr-code-id">' + blok.qr + '</div>'
+        + '<div class="qr-titik-list">'
+        + '<b>3 Titik Pantau:</b><br>'
+        + '1. Titik A — Lat: 0.000000, Lng: 0.000000<br>'
+        + '2. Titik B — Lat: 0.000000, Lng: 0.000000<br>'
+        + '3. Titik C — Lat: 0.000000, Lng: 0.000000'
+        + '</div>'
+        + '<button class="qr-print-btn" style="margin-top:10px;" onclick="printQR(\'' + blok.id + '\',\'' + blok.label + '\',\'' + blok.qr + '\')">Print QR</button>';
+      blokGrid.appendChild(card);
+      setTimeout(function() {
+        var el = document.getElementById('qr-' + safeId);
+        if (el) new QRCode(el, { text: blok.qr, width: 140, height: 140, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+      }, 50);
+    });
+
+    section.appendChild(blokGrid);
+    grid.appendChild(section);
+  });
+}
+
+function printQR(id, label, qrData) {
+  const win = window.open('', '_blank');
+  win.document.write('<html><head><title>QR ' + id + '</title><style>body{font-family:sans-serif;text-align:center;padding:40px;}h2{margin-bottom:4px;}p{color:#666;font-size:14px;margin-bottom:20px;}</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body><h2>' + id + '</h2><p>' + label + '</p><div id="q"></div><p style="margin-top:16px;font-size:11px;font-family:monospace;">' + qrData + '</p><p style="font-size:12px;color:#999;">Tempel di lokasi pos patroli</p><script>new QRCode(document.getElementById("q"),{text:"' + qrData + '",width:260,height:260,colorDark:"#000",colorLight:"#fff",correctLevel:QRCode.CorrectLevel.H});setTimeout(function(){window.print();},700);<\/script></body></html>');
+}
+
+// ============================================================
+// LIVE TRACKER — DEFAULT SATELLITE
+// ============================================================
+let trackerMapLayers = {};
+
+function initTrackerMap() {
+  if (trackerMap) { trackerMap.invalidateSize(); return; }
+  const lats = BLOK_CONFIG.map(b => b.lat), lngs = BLOK_CONFIG.map(b => b.lng);
+  const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+  trackerMap = L.map('tracker-map', { zoomControl: true, scrollWheelZoom: true }).setView([centerLat, centerLng], 14);
+
+  const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '©Esri', maxZoom: 19 });
+  const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '©CartoDB', maxZoom: 19 });
+
+  satLayer.addTo(trackerMap);
+  trackerMapLayers = { sat: satLayer, dark: streetLayer, current: 'sat' };
+}
+
+function toggleTrackerMapLayer() {
+  if (!trackerMap || !trackerMapLayers.sat) return;
+  if (trackerMapLayers.current === 'sat') {
+    trackerMap.removeLayer(trackerMapLayers.sat);
+    trackerMapLayers.dark.addTo(trackerMap);
+    trackerMapLayers.current = 'dark';
+  } else {
+    trackerMap.removeLayer(trackerMapLayers.dark);
+    trackerMapLayers.sat.addTo(trackerMap);
+    trackerMapLayers.current = 'sat';
+  }
+}
+
+let trackUnsub = null;
+// Store raw tracking docs for deletion
+let trackingDocs = [];
+
+function loadTracking() {
+  if (trackUnsub) { trackUnsub(); trackUnsub = null; }
+
+  // Get tracking data from last 24 hours
+  const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+
+  trackUnsub = db.collection('tracking')
+    .where('timestampMs', '>=', cutoff)
+    .orderBy('timestampMs', 'desc')
+    .limit(500)
+    .onSnapshot(snapshot => {
+      if (snapshot.empty) {
+        trackingData = [];
+        trackingDocs = [];
+        document.getElementById('tracker-durasi').innerHTML = '<div class="empty-state"><div class="empty-icon">📡</div><p>Belum ada data tracking</p></div>';
+        document.getElementById('tracker-list').innerHTML = '<div class="empty-state"><div class="empty-icon">📍</div><p>Belum ada titik</p></div>';
+        return;
+      }
+      trackingDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      trackingData = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          'docId': doc.id,
+          'TimestampMs': d.timestampMs || 0,
+          'Timestamp': d.timestamp || '',
+          'Nama': d.nama || '',
+          'Shift': d.shift || '',
+          'Blok': d.blok || d.pos || '',
+          'GPS Lat': d.gpsLat || '',
+          'GPS Lng': d.gpsLng || '',
+          'Akurasi': d.gpsAccuracy || ''
+        };
+      });
+      renderTrackerMap();
+      renderDurasi();
+      renderTrackList();
+    }, () => {
+      document.getElementById('tracker-durasi').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Gagal memuat data tracking</p></div>';
+    });
+}
+
+function renderTrackerMap() {
+  if (!trackerMap) return;
+  trackerPolylines.forEach(l => trackerMap.removeLayer(l));
+  trackerMarkers.forEach(m => trackerMap.removeLayer(m));
+  trackerPolylines = []; trackerMarkers = [];
+
+  const byNama = {};
+  getFilteredTracking().forEach(r => {
+    const lat = parseFloat(r['GPS Lat']), lng = parseFloat(r['GPS Lng']);
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+    if (!byNama[r['Nama']]) byNama[r['Nama']] = [];
+    byNama[r['Nama']].push({ lat, lng, ts: Number(r['TimestampMs']) || 0, blok: r['Blok'] || r['Pos'] || '', waktu: r['Timestamp'] || '' });
+  });
+
+  const allBounds = [];
+  Object.entries(byNama).forEach(([nama, pts]) => {
+    const color = getColor(nama);
+    pts.sort((a, b) => a.ts - b.ts);
+    const latlngs = pts.map(p => [p.lat, p.lng]);
+    allBounds.push(...latlngs);
+
+    const poly = L.polyline(latlngs, { color, weight: 3, opacity: 0.8, dashArray: '8 6' }).addTo(trackerMap);
+    trackerPolylines.push(poly);
+
+    pts.slice(0, -1).forEach(p => {
+      const dot = L.circleMarker([p.lat, p.lng], { radius: 3, color, fillColor: color, fillOpacity: 0.5, weight: 1 }).addTo(trackerMap);
+      trackerMarkers.push(dot);
+    });
+
+    const last = pts[pts.length - 1];
+    const endIcon = L.divIcon({
+      html: '<div style="position:relative"><div style="width:16px;height:16px;border-radius:50%;background:' + color + ';border:3px solid #fff;box-shadow:0 0 14px ' + color + ';"></div><div style="position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.9);color:' + color + ';border-radius:5px;padding:2px 8px;font-size:11px;white-space:nowrap;font-weight:700;border:1px solid ' + color + '44;">' + nama + '</div></div>',
+      className: '', iconAnchor: [8, 8]
+    });
+    const endM = L.marker([last.lat, last.lng], { icon: endIcon }).addTo(trackerMap)
+      .bindPopup('<b style="color:' + color + '">' + nama + '</b><br>Blok: <b>' + (last.blok || '-') + '</b><br>' + last.waktu + '<br><a href="https://maps.google.com/?q=' + last.lat + ',' + last.lng + '" target="_blank" style="color:#00D4FF;">Buka di Maps</a>');
+    trackerMarkers.push(endM);
+  });
+
+  if (allBounds.length > 0) trackerMap.fitBounds(allBounds, { padding: [40, 40], maxZoom: 17 });
+}
+
+function renderDurasi() {
+  const el = document.getElementById('tracker-durasi');
+  const filtered = getFilteredTracking();
+  if (!filtered.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📡</div><p>Belum ada data tracking' + (activeDate ? ' pada ' + activeDate : '') + '</p></div>'; return; }
+
+  const byNama = {};
+  filtered.forEach(r => {
+    if (!r['Nama']) return;
+    if (!byNama[r['Nama']]) byNama[r['Nama']] = { pts: [], shift: r['Shift'] || '' };
+    byNama[r['Nama']].pts.push({ ts: Number(r['TimestampMs']) || 0, blok: r['Blok'] || r['Pos'] || '-', waktu: r['Timestamp'] || '' });
+  });
+
+  const allMenit = Object.values(byNama).map(v => {
+    const s = v.pts.sort((a, b) => a.ts - b.ts);
+    return s.length < 2 ? 0 : Math.round((s[s.length - 1].ts - s[0].ts) / 60000);
+  });
+  const maxMenit = Math.max(...allMenit, 1);
+
+  let html = '';
+  Object.entries(byNama).forEach(([nama, val]) => {
+    const pts = val.pts.sort((a, b) => a.ts - b.ts);
+    const color = getColor(nama);
+    const totalMs = pts.length < 2 ? 0 : (pts[pts.length - 1].ts - pts[0].ts);
+    const totalMenit = Math.round(totalMs / 60000);
+    const jam = Math.floor(totalMenit / 60), menit = totalMenit % 60;
+    const durasiStr = jam > 0 ? jam + 'j ' + menit + 'm' : totalMenit + ' mnt';
+    const mulai = pts[0].ts ? new Date(pts[0].ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+    const terakhir = pts[pts.length - 1].ts ? new Date(pts[pts.length - 1].ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+    const blokAktif = pts[pts.length - 1].blok;
+    const pct = Math.min(100, Math.round((totalMenit / maxMenit) * 100));
+
+    html += '<div class="durasi-card" style="border-top-color:' + color + '"><div class="durasi-head"><div class="durasi-nama" style="color:' + color + '">' + nama + '</div><div class="durasi-shift-badge">' + (val.shift || '—') + '</div></div><div class="durasi-stats-row"><div class="durasi-stat-box"><div class="durasi-stat-num" style="color:' + color + '">' + durasiStr + '</div><div class="durasi-stat-lbl">Total Durasi</div></div><div class="durasi-stat-box"><div class="durasi-stat-num" style="color:' + color + '">' + pts.length + '</div><div class="durasi-stat-lbl">Titik Tercatat</div></div><div class="durasi-stat-box"><div class="durasi-stat-num" style="color:' + color + ';font-size:15px">' + blokAktif + '</div><div class="durasi-stat-lbl">Blok Aktif</div></div><div class="durasi-stat-box"><div class="durasi-stat-num" style="color:' + color + ';font-size:15px">' + terakhir + '</div><div class="durasi-stat-lbl">Update Terakhir</div></div></div><div class="durasi-info-row"><span>Mulai: ' + mulai + '</span><span>' + pts.length + ' titik GPS</span></div><div class="durasi-bar-bg"><div class="durasi-bar-fill" style="width:' + pct + '%;background:linear-gradient(90deg,' + color + ',' + color + '66);"></div></div></div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderTrackList() {
+  const el = document.getElementById('tracker-list');
+  const filtered = getFilteredTracking();
+  if (!filtered.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📍</div><p>Belum ada titik tracking' + (activeDate ? ' pada ' + activeDate : '') + '</p></div>'; return; }
+  el.innerHTML = filtered.slice(0, 30).map(r => {
+    const color = getColor(r['Nama'] || '');
+    const akurasi = r['Akurasi'] || r['Akurasi GPS (m)'] || '?';
+    const deleteBtn = canDelete() && r['docId'] ? '<div class="track-point-actions"><button class="action-btn delete" onclick="confirmDeleteTracking(\'' + r['docId'] + '\',\'' + (r['Nama'] || '').replace(/'/g, "\\'") + '\')" title="Hapus titik">🗑️</button></div>' : '';
+    return '<div class="track-point-item"><div class="track-point-dot" style="background:' + color + ';box-shadow:0 0 7px ' + color + ';"></div><div class="track-point-info"><div class="track-point-nama" style="color:' + color + '">' + (r['Nama'] || '-') + '</div><div class="track-point-meta"><span>' + (r['Blok'] || r['Pos'] || '-') + '</span><span>' + (r['Timestamp'] || '-') + '</span><span>±' + akurasi + 'm</span><span>' + (r['GPS Lat'] || '-') + ', ' + (r['GPS Lng'] || '-') + '</span></div></div>' + deleteBtn + '</div>';
+  }).join('');
+}
+
+// Auto refresh NOT needed — Firebase onSnapshot provides realtime updates
+// Legacy interval removed
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('load', function() {
+  if (!checkSession()) return; // Stay on login screen
+
+  setToday();
+  loadData();
+  setTimeout(function() { initMap('live-map', 'mini'); }, 300);
+});
+
+// Also init after login
+const origDoLogin = doLogin;
+// Override handled inline — after login, init dashboard
+(function() {
+  const _btn = document.getElementById('login-btn');
+  _btn.addEventListener('click', function() {
+    // If login succeeded (overlay hidden), init
+    setTimeout(function() {
+      if (document.getElementById('login-overlay').classList.contains('hidden')) {
+        setToday();
+        loadData();
+        setTimeout(function() { initMap('live-map', 'mini'); }, 300);
+      }
+    }, 100);
+  });
+})();
+
+// ============================================================
+// INSERT TEST DATA + TRACKING (untuk testing, hapus nanti kalau sudah production)
+// ============================================================
+async function insertTestData() {
+  if (!confirm('Insert 5 data laporan dummy + 30 tracking points ke Firestore?\n\nData ini untuk testing. Bisa dihapus nanti.')) return;
+
+  const names = ['Petugas 1','Petugas 2','Petugas 3','Petugas 4','Petugas 5'];
+  const shifts = ['Shift Pagi (06:00-14:00)','Shift Siang (14:00-22:00)','Shift Malam (22:00-06:00)'];
+  const statuses = ['AMAN','AMAN','AMAN','TIDAK AMAN','AMAN'];
+  const catatanList = ['Area aman, tidak ada temuan','Kondisi normal','Patrol selesai tanpa kendala','Ditemukan pagar rusak di sisi timur','Semua pos terjaga'];
+  const bloks = ['A99a','B00c','C01a','D00f','F06b'];
+  const afds = ['1','2','3','4','6'];
+
+  const now = new Date();
+  const batch = db.batch();
+
+  // Insert 5 laporan
+  for (let i = 0; i < 5; i++) {
+    const waktuDate = new Date(now.getTime() - i * 60000); // mundur 1 menit per data (semua hari ini)
+    const dd = String(waktuDate.getDate()).padStart(2,'0');
+    const mm = String(waktuDate.getMonth()+1).padStart(2,'0');
+    const yyyy = waktuDate.getFullYear();
+    const hh = String(waktuDate.getHours()).padStart(2,'0');
+    const mi = String(waktuDate.getMinutes()).padStart(2,'0');
+    const ss = String(waktuDate.getSeconds()).padStart(2,'0');
+    const waktuStr = dd + '/' + mm + '/' + yyyy + ' ' + hh + ':' + mi + ':' + ss;
+    const coords = getCoords(bloks[i]);
+
+    const docId = Date.now().toString() + '_' + i;
+    const ref = db.collection('laporan').doc(docId);
+    batch.set(ref, {
+      nama: names[i],
+      shift: shifts[i % 3],
+      afdeling: afds[i],
+      pos: bloks[i].toUpperCase(),
+      titikPantau: 'Titik ' + (i+1),
+      waktu: waktuStr,
+      waktuISO: waktuDate.toISOString(),
+      gpsLat: coords[0].toFixed(6),
+      gpsLng: coords[1].toFixed(6),
+      gpsAccuracy: '5',
+      status: statuses[i],
+      catatan: catatanList[i],
+      foto: '',
+      deleted: false,
+      deletedAt: '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
+  // Insert tracking data — 3 petugas x 10 points each (simulating movement)
+  const trackPetugas = ['Petugas 1','Petugas 2','Petugas 3'];
+  const trackBloks = ['A99a','B00c','C01a'];
+  const trackShifts = ['Shift Pagi (06:00-14:00)','Shift Siang (14:00-22:00)','Shift Malam (22:00-06:00)'];
+
+  for (let p = 0; p < 3; p++) {
+    const baseCoords = getCoords(trackBloks[p]);
+    let lat = baseCoords[0];
+    let lng = baseCoords[1];
+
+    for (let t = 0; t < 10; t++) {
+      const pointTime = new Date(now.getTime() - (9 - t) * 30000); // 30 seconds apart, going forward
+      const dd2 = String(pointTime.getDate()).padStart(2,'0');
+      const mm2 = String(pointTime.getMonth()+1).padStart(2,'0');
+      const yyyy2 = pointTime.getFullYear();
+      const hh2 = String(pointTime.getHours()).padStart(2,'0');
+      const mi2 = String(pointTime.getMinutes()).padStart(2,'0');
+      const ss2 = String(pointTime.getSeconds()).padStart(2,'0');
+      const tsStr = dd2 + '/' + mm2 + '/' + yyyy2 + ' ' + hh2 + ':' + mi2 + ':' + ss2;
+
+      // Simulate movement — small random offset each point
+      lat += (Math.random() - 0.4) * 0.0005;
+      lng += (Math.random() - 0.4) * 0.0005;
+
+      const trackDocId = 'track_' + Date.now().toString() + '_' + p + '_' + t;
+      const trackRef = db.collection('tracking').doc(trackDocId);
+      batch.set(trackRef, {
+        nama: trackPetugas[p],
+        shift: trackShifts[p],
+        blok: trackBloks[p].toUpperCase(),
+        gpsLat: lat.toFixed(6),
+        gpsLng: lng.toFixed(6),
+        gpsAccuracy: String(Math.floor(Math.random() * 15) + 3),
+        timestamp: tsStr,
+        timestampMs: pointTime.getTime()
+      });
+    }
+  }
+
+  try {
+    await batch.commit();
+    alert('5 data laporan + 30 tracking points berhasil di-insert!\nDashboard akan otomatis update.');
+  } catch (e) {
+    alert('Gagal insert: ' + e.message + '\n\nCek Console (F12) untuk detail.');
+    console.error('Insert test data error:', e);
+  }
+}
+
+// ============================================================
+// EXPORT TO EXCEL (HTML TABLE FORMAT)
+// ============================================================
+function localDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function openExport() {
+  const today = localDateStr(new Date());
+  document.getElementById('export-from').value = today;
+  document.getElementById('export-to').value = today;
+  document.getElementById('export-status').style.display = 'none';
+  document.getElementById('export-dialog').classList.add('open');
+}
+
+function closeExport(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('export-dialog').classList.remove('open');
+}
+
+function setExportRange(range) {
+  const now = new Date();
+  const today = localDateStr(now);
+  document.getElementById('export-to').value = today;
+  if (range === 'today') {
+    document.getElementById('export-from').value = today;
+  } else if (range === 'week') {
+    const d = new Date(now); d.setDate(d.getDate() - 7);
+    document.getElementById('export-from').value = localDateStr(d);
+  } else if (range === 'month') {
+    const d = new Date(now); d.setDate(d.getDate() - 30);
+    document.getElementById('export-from').value = localDateStr(d);
+  } else {
+    document.getElementById('export-from').value = '';
+    document.getElementById('export-to').value = '';
+  }
+}
+
+async function doExport() {
+  const fromVal = document.getElementById('export-from').value;
+  const toVal = document.getElementById('export-to').value;
+  const statusEl = document.getElementById('export-status');
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Mengambil data dari Firestore...';
+  statusEl.style.color = 'var(--accent)';
+
+  try {
+    let query = db.collection('laporan').where('deleted', '==', false).orderBy('createdAt', 'desc');
+    const snapshot = await query.get();
+    let rows = snapshot.docs.map(doc => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        nama: d.nama || '',
+        shift: d.shift || '',
+        afdeling: d.afdeling || '',
+        blok: d.pos || '',
+        titikPantau: d.titikPantau || '',
+        waktu: d.waktu || '',
+        status: d.status || '',
+        catatan: d.catatan || '',
+        gpsLat: d.gpsLat || '',
+        gpsLng: d.gpsLng || '',
+        gpsAccuracy: d.gpsAccuracy || '',
+      };
+    });
+
+    // Filter by date range
+    if (fromVal || toVal) {
+      rows = rows.filter(r => {
+        const m = String(r.waktu).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (!m) return false;
+        const rowDate = m[3] + '-' + m[2] + '-' + m[1]; // yyyy-mm-dd
+        if (fromVal && rowDate < fromVal) return false;
+        if (toVal && rowDate > toVal) return false;
+        return true;
+      });
+    }
+
+    if (!rows.length) {
+      statusEl.textContent = 'Tidak ada data pada rentang tanggal ini.';
+      statusEl.style.color = 'var(--warn)';
+      return;
+    }
+
+    // Build HTML table for .xls export
+    const headers = ['No','Nama Petugas','Shift','Afdeling','Blok','Titik Pantau','Waktu','Status','Catatan','GPS Lat','GPS Lng','Akurasi GPS'];
+    let tableHTML = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+    tableHTML += '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Laporan Patrol</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>';
+    tableHTML += '<body><table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">';
+    tableHTML += '<tr>';
+    headers.forEach(h => {
+      tableHTML += '<th style="background:#004b31;color:#fff;font-weight:bold;padding:8px 12px;border:1px solid #999;white-space:nowrap;">' + h + '</th>';
+    });
+    tableHTML += '</tr>';
+
+    rows.forEach((r, i) => {
+      const bgColor = i % 2 === 0 ? '#ffffff' : '#f2f2f2';
+      const statusColor = r.status === 'AMAN' ? '#27ae60' : '#e74c3c';
+      tableHTML += '<tr style="background:' + bgColor + ';">';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + (i + 1) + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;">' + r.nama + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;">' + r.shift + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + r.afdeling + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + r.blok + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;">' + r.titikPantau + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;white-space:nowrap;">' + r.waktu + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;text-align:center;color:' + statusColor + ';font-weight:bold;">' + r.status + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;">' + r.catatan + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;">' + r.gpsLat + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;">' + r.gpsLng + '</td>';
+      tableHTML += '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + r.gpsAccuracy + '</td>';
+      tableHTML += '</tr>';
+    });
+
+    tableHTML += '</table></body></html>';
+
+    const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const rangeLabel = fromVal && toVal ? fromVal + '_sd_' + toVal : 'semua';
+    a.href = url;
+    a.download = 'Laporan_Patrol_' + rangeLabel + '.xls';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    statusEl.textContent = rows.length + ' data berhasil di-export!';
+    statusEl.style.color = 'var(--green)';
+    setTimeout(closeExport, 1500);
+  } catch (e) {
+    statusEl.textContent = 'Gagal: ' + e.message;
+    statusEl.style.color = 'var(--danger)';
+    console.error('Export error:', e);
+  }
+}
+</script>
+</body>
+</html>
